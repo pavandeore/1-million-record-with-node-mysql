@@ -1,9 +1,28 @@
 const express = require("express");
 const mysql = require("mysql2");
+const amqp = require('amqplib');
 
 const app = express();
 app.use(express.json());
 const port = 9000;
+
+const RABBITMQ_URL = 'amqp://localhost';
+const QUEUE_NAME = 'update_queue';
+
+// Function to send a message to RabbitMQ
+async function sendToQueue(message) {
+  try {
+    const connection = await amqp.connect(RABBITMQ_URL);
+    const channel = await connection.createChannel();
+    await channel.assertQueue(QUEUE_NAME, { durable: true });
+    channel.sendToQueue(QUEUE_NAME, Buffer.from(JSON.stringify(message)));
+    console.log('Message sent to RabbitMQ:', message);
+    await channel.close();
+    await connection.close();
+  } catch (error) {
+    console.error('Failed to send message to RabbitMQ:', error);
+  }
+}
 
 const db = mysql.createConnection({
   host: "localhost",
@@ -36,35 +55,16 @@ app.get("/records", (req, res) => {
   });
 });
 
-app.put("/update-records", (req, res) => {
-  const newName = req.body.name; // assumptions optverified = false - (the field that we want to set false for all users)
-  db.beginTransaction((err) => {
-    if (err) {
-      console.error("transaction error");
-      return res.status(500).json({ error: "transaction error" });
-    }
+app.put("/update-records", async (req, res) => {
+  const updateData = req.body;
 
-    const query = "UPDATE random_table SET name = ?";
-    db.query(query, [newName], (error, results) => {
-      if (error) {
-        return db.rollback(() => {
-          console.error("query error");
-          res.status(500).json({ error: "query error" });
-        });
-      }
+  try {
+    await sendToQueue(updateData);
+    res.status(202).send({ status: 'Update request received and queued.' });
+  } catch (error) {
+    res.status(500).send({ error: 'Failed to queue update request.' });
+  }
 
-      db.commit((err) => {
-        if (err) {
-          return db.rollback(() => {
-            console.error("commit error", err);
-            res.status(500).json({ error: "commit error" });
-          });
-        }
-
-        res.json({ success: true, results });
-      });
-    });
-  });
 });
 
 app.listen(port, () => {
