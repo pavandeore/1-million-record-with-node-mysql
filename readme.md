@@ -1,3 +1,22 @@
+# RabbitMQ use to make update request with node and mysql CRUD app
+
+to run this 
+
+## Start the rabbitmq server 
+- sudo systemctl start rabbitmq-server
+
+## Start the worker
+- node worker.js
+
+## Start the Web Server
+- npm run start 
+
+## To test 1000 update request at 1 time
+- bash ./send_request.sh
+
+
+
+
 if you are not on ubuntu follow this guide - https://www.rabbitmq.com/docs/platforms
 
 
